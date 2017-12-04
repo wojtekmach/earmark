@@ -67,7 +67,10 @@ defmodule Earmark.Block do
   end
 
 
-#   @spec _parse(Line.ts, ts, Options.t) :: {ts, Earmark.Message.ts}
+
+  @typep list_type :: :ul | :ol
+
+  @spec _parse(Line.ts, ts, Options.t) :: {ts, Options.t}
   defp _parse([], result, options), do: {result, options}
 
   ###################
@@ -81,7 +84,6 @@ defmodule Earmark.Block do
              |
                 rest
              ], result, options) do
-
     _parse(rest, [ %Heading{content: heading, level: level, lnb: lnb} | result ], options)
   end
 
@@ -173,7 +175,7 @@ defmodule Earmark.Block do
     {spaced, list_lines, rest, _offset, indent_level} = read_list_lines(rest, opens_inline_code(first), initial_indent)
 
     lines = Enum.map(list_lines, &indent_list_item_body(&1, indent_level || 0))
-    spaced = (spaced || blank_line_in?(list_lines)) && peek(rest, Line.ListItem, type)
+    spaced = (spaced || blank_line_in?(list_lines)) && peek(rest, type)
     lines = [content | lines]
     {blocks, _, options1} = Parser.parse(lines, %{options | line: lnb}, true)
 
@@ -329,11 +331,12 @@ defmodule Earmark.Block do
       add_message(options, {:warning, anything.lnb, "Unexpected line #{anything.line}"}))
   end
 
+
   #######################################################
   # Assign attributes that follow a block to that block #
   #######################################################
 
-#   @spec assign_attributes_to_blocks( ts, ts ) :: ts
+  @spec assign_attributes_to_blocks( ts, ts ) :: ts
   def assign_attributes_to_blocks([], result), do: Enum.reverse(result)
 
   def assign_attributes_to_blocks([ %Ial{attrs: attrs}, block | rest], result) do
@@ -348,11 +351,10 @@ defmodule Earmark.Block do
   # Consolidate multiline inline code blocks into an element #
   ############################################################
   @not_pending {nil, 0}
-  # ([#{},...]) -> {[#{}],[#{}],{'nil' | binary(),number()}}
-  # @spec consolidate_para( ts ) :: { ts, ts, {nil | String.t, number} }
+  @spec consolidate_para( Line.ts ) ::  { Line.ts, Line.ts, inline_code_continuation }
   defp consolidate_para( lines ), do: _consolidate_para( lines, [], @not_pending )
 
-#   @spec _consolidate_para( ts, ts, inline_code_continuation ) :: { ts, ts, inline_code_continuation }
+  @spec _consolidate_para( Line.ts, Line.ts, inline_code_continuation ) :: { Line.ts, Line.ts, inline_code_continuation }
   defp _consolidate_para( [], result, pending ) do
     {result, [], pending}
   end
@@ -369,7 +371,7 @@ defmodule Earmark.Block do
   # Consolidate one or more list items into a list #
   ##################################################
 
-#   @spec consolidate_list_items( ts, ts ) :: ts
+  @spec consolidate_list_items( ts, ts ) :: ts
   defp consolidate_list_items([], result) do
     result |> Enum.map(&compute_list_spacing/1)  # no need to reverse
   end
@@ -392,6 +394,8 @@ defmodule Earmark.Block do
     consolidate_list_items(rest, [ head | result ])
   end
 
+
+  @spec compute_list_spacing( t ) :: t
   defp compute_list_spacing( list = %List{blocks: items} ) do
     with spaced = any_spaced_items?(items),
          unified_items = Enum.map(items, &(%{&1 | spaced: spaced}))
@@ -401,6 +405,8 @@ defmodule Earmark.Block do
   end
   defp compute_list_spacing( anything_else ), do: anything_else # nop
 
+
+  @spec any_spaced_items?( ts ) :: boolean()
   defp any_spaced_items?([]), do: false
   defp any_spaced_items?([%{spaced: true}|_]), do: true
   defp any_spaced_items?([_|tail]), do: any_spaced_items?(tail)
@@ -410,7 +416,7 @@ defmodule Earmark.Block do
   # Read in a table (consecutive TableLines with
   # the same number of columns)
 
-#   @spec read_table( ts, number, %Table{} ) :: { %Table{}, ts }
+  @spec read_table( ts, number, %Table{} ) :: { %Table{}, ts }
   defp read_table([ %Line.TableLine{columns: cols} | rest ],
                     col_count,
                     table = %Table{})
@@ -432,11 +438,20 @@ defmodule Earmark.Block do
   end
 
 
-#   @spec look_for_alignments( [String.t] ) :: atom
+  @spec look_for_alignments( list(strings) ) :: maybe(list(atom()))
   defp look_for_alignments([ _first, second | _rest ]) do
     if Enum.all?(second, fn row -> row =~ ~r{^:?-+:?$} end) do
       second
-      |> Enum.map(fn row -> Regex.replace(~r/-+/, row, "-") end)
+      |> remove_plus_from_table_seps()
+      |> map_rows_to_alignment_type()
+    else
+      nil
+    end
+  end
+
+  @spec map_rows_to_alignment_type( strings ) :: list(atom())
+  defp map_rows_to_alignment_type(rows) do 
+    rows
       |> Enum.map(fn row -> case row do
            ":-:" -> :center
            ":-"  -> :left
@@ -444,21 +459,25 @@ defmodule Earmark.Block do
            "-:"  -> :right
          end
       end)
-    else
-      nil
-    end
   end
 
+  @spec remove_plus_from_table_seps( strings ) :: strings
+  defp remove_plus_from_table_seps(rows) do 
+    rows 
+    |> Enum.map(fn row -> Regex.replace(~r/-+/, row, "-") end)
+  end
 
   #####################################################
   # Traverse the block list and build a list of links #
   #####################################################
 
+  @spec links_from_blocks( ts ) :: map()
   defp links_from_blocks(blocks) do
     visit(blocks, Map.new, &link_extractor/2)
   end
+ 
 
-#   @spec link_extractor(t, %{}) :: %{}
+  @spec link_extractor(t, map()) :: map()
   defp link_extractor(item = %IdDef{id: id}, result) do
     Map.put(result, String.downcase(id), item)
   end
@@ -470,7 +489,7 @@ defmodule Earmark.Block do
   # Visitor pattern for each block #
   ##################################
 
-#   @spec visit(ts, %{}, (t, %{} -> %{})) :: %{}
+  @spec visit(ts, map(), (t, map() -> map())) :: map()
   defp visit([], result, _func), do: result
 
   # Structural node BlockQuote -> descend
@@ -500,11 +519,17 @@ defmodule Earmark.Block do
     visit(rest, result, func)
   end
 
+
   ###################################################################
   # Consume HTML, taking care of nesting. Assumes one tag per line. #
   ###################################################################
 
+  @spec html_match_to_closing( Line.t, Line.ts ) :: { Line.ts, Line.ts, Line.ts }
   defp html_match_to_closing(opener, rest), do: find_closing_tags([opener], rest, [opener])
+
+
+  @spec find_closing_tags( Line.ts, Line.ts, Line.ts ) :: { Line.ts, Line.ts, Line.ts }
+  defp find_closing_tags(needed, rest, html_lines)
 
   # No more open tags, happy case
   defp find_closing_tags([], rest, html_lines), do: {html_lines, rest, []}
@@ -521,10 +546,12 @@ defmodule Earmark.Block do
     end
   end
 
+
   ##################
   # Plugin related #
   ##################
 
+  @spec collect_plugin_lines( Line.ts, String.t, list({String.t, number()}) ) :: {list({String.t, number()}), Line.ts}
   defp collect_plugin_lines(lines, prefix, result)
   defp collect_plugin_lines([], _, result), do: {Enum.reverse(result), []}
   defp collect_plugin_lines([%Line.Plugin{prefix: prefix, content: content, lnb: lnb} | rest], prefix, result),
@@ -535,15 +562,20 @@ defmodule Earmark.Block do
   # Helpers #
   ###########
 
+  @spec closes_tag?( Line.t, Line.t ) :: boolean()
   defp closes_tag?(%Line.HtmlCloseTag{tag: ctag}, %Line.HtmlOpenTag{tag: otag}), do: ctag == otag
   defp closes_tag?(_, _), do: false
 
+  # Uncomment when dialyzer is ready
+  # @spec opens_tag?( %Line.HtmlOpenTag{} ) :: true
+  # @spec opens_tag?( Line.t ) :: false
+  @spec opens_tag?( Line.t ) :: boolean()
   defp opens_tag?(%Line.HtmlOpenTag{}), do: true
   defp opens_tag?(_), do: false
 
 
   # (_,{'nil' | binary(),number()}) -> #{}jj
-#   @spec inline_or_text?( Line.t, inline_code_continuation ) :: %{pending: String.t, continue: boolean}
+  @spec inline_or_text?( Line.t, inline_code_continuation ) :: %{pending: inline_code_continuation, continue: boolean}
   defp inline_or_text?(line, pending)
   defp inline_or_text?(line = %Line.Text{}, @not_pending) do
     pending = opens_inline_code(line)
@@ -560,11 +592,11 @@ defmodule Earmark.Block do
   end
 
 
-  defp peek([], _, _), do: false
-  defp peek([head | _], struct, type) do
-    head.__struct__ == struct && head.type == type
-  end
+  @spec peek( Line.ts, list_type ) :: boolean()
+  defp peek([%Line.ListItem{type: item_type}| _], type) when type == item_type, do: true
+  defp peek(_, _), do: false
 
+  @spec extract_start( %ListItem{} ) :: String.t
   defp extract_start(%{bullet: "1."}), do: ""
   defp extract_start(%{bullet: bullet}) do
     case Regex.run(~r{^(\d+)\.}, bullet) do
@@ -573,6 +605,7 @@ defmodule Earmark.Block do
     end
   end
 
+  @spec remove_trailing_blank_lines( Line.ts ) :: Line.ts
   defp remove_trailing_blank_lines(lines) do
     lines
     |> Enum.reverse
