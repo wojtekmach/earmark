@@ -5,6 +5,7 @@ defmodule Earmark.Mixfile do
 
   @deps [
     {:credo, "~> 0.10", only: [:dev, :test]},
+    {:excoveralls, "~> 0.10", only: :test},
     {:dialyxir, "~> 0.5", only: [:dev, :test]}
   ]
 
@@ -30,7 +31,14 @@ defmodule Earmark.Mixfile do
       deps: @deps,
       description: @description,
       package: package(),
-      aliases: [docs: &docs/1, readme: &readme/1]
+      aliases: [docs: &docs/1, readme: &readme/1],
+      test_coverage: [tool: ExCoveralls],
+      preferred_cli_env: [
+        coveralls: :test,
+        "coveralls.detail": :test,
+        "coveralls.post": :test,
+        "coveralls.html": :test
+      ],
     ]
   end
 

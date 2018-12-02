@@ -1,4 +1,10 @@
-# 1.3
+# 1.3.1
+
+* Fix for issues
+  - [#212 Double space at EOL force br]( https://github.com/pragdave/earmark/issues/212 )
+  - [#211 Better documentation for error messages]( https://github.com/pragdave/earmark/issues/211 )
+
+# 1.3.0 2018/11/15
 
 * Fix for issues
   - [#208 Inline code made Commonmark compatible]( https://github.com/pragdave/earmark/issues/208 )
