@@ -144,20 +144,22 @@ defmodule Earmark.Transform do
   
   @dashes_rgx ~r{--}
   @dbl1_rgx ~r{(^|[-—/\(\[\{"”“\s])'}
-  @single_rgx ~r{\'}
+  @single_rgx ~r{\\'}
   @dbl2_rgx ~r{(^|[-—/\(\[\{‘\s])\"}
   @dbl3_rgx ~r{"}
-  defp smartypants(text, options)
-  defp smartypants(text, %{smartypants: true}) do
+
+  @doc false
+  def smartypants(text, options \\ %{smartypants: true})
+  def smartypants(text, %{smartypants: true}) do
     text
     |> replace(@dashes_rgx, "—")
     |> replace(@dbl1_rgx, "\\1‘")
-    |> replace(@single_rgx, "’")
+    |> replace(@single_rgx, "'")
     |> replace(@dbl2_rgx, "\\1“")
     |> replace(@dbl3_rgx, "”")
     |> String.replace("...", "…")
   end
-  defp smartypants(text, _options), do: text
+  def smartypants(text, _options), do: text
 
   defp void_tag({tag, atts, []}, options, level) do
     [ make_indent(options, level),
