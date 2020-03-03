@@ -1,27 +1,18 @@
 defmodule Acceptance.Html.BlockQuotesTest do
   use ExUnit.Case, async: true
 
+  import Support.GenHtml
+
   describe "with breaks: true" do
     test "acceptance test 490 with breaks" do
-      expected = "<blockquote><p>bar<br />baz<br />foo</p>\n</blockquote>\n"
+      expected = gen({:blockquote, {:p, ["bar", :br, "baz", :br, "foo"]}}) |> IO.inspect
       markdown = "> bar\nbaz\n> foo\n"
       assert Earmark.as_html!(markdown, breaks: true) == expected
     end
 
-    test "acceptance test 580 with breaks" do
-      expected = "<ol>\n<li>foo<br />bar\n</li>\n</ol>\n"
-      markdown = "1. foo\nbar"
-      assert Earmark.as_html!(markdown, breaks: true) == expected
-    end
-
-    test "acceptance test 581 with breaks" do
-      expected = "<ul>\n<li>a<br />b<br />c\n</li>\n</ul>\n"
-      markdown = "* a\n  b\nc"
-      assert Earmark.as_html!(markdown, breaks: true) == expected
-    end
 
     test "acceptance test 582 with breaks" do
-      expected = "<ul>\n<li>x<br />a<br />| A | B |\n</li>\n</ul>\n"
+      expected = gen({:ul, {:li, ["x", :br, "a", :br, "| A | B |"]}})
       markdown = "* x\n  a\n| A | B |"
       assert Earmark.as_html!(markdown, breaks: true) == expected
     end
